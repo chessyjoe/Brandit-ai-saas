@@ -8,9 +8,8 @@ import React, {
   ReactNode,
   FormEvent
 } from 'react';
-import { Mail, Lock, Eye, EyeOff, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 
-// Enhanced interfaces for marketing-focused auth
+// User and Auth interfaces
 interface User {
   id: string;
   email: string;
@@ -54,9 +53,9 @@ interface AuthContextType {
   logout: () => void;
   isAuthenticated: boolean;
   sendVerificationEmail: () => Promise<{ success: boolean; error?: string }>;
-  resetPassword: (email: string) => Promise<{ success: boolean; error?: string }>;
-  updateProfile: (updates: Partial<User['profile']>) => Promise<{ success: boolean; error?: string }>;
-  verifyEmail: (token: string) => Promise<{ success: boolean; error?: string }>;
+  resetPassword: () => Promise<{ success: boolean; error?: string }>;
+  updateProfile: () => Promise<{ success: boolean; error?: string }>;
+  verifyEmail: () => Promise<{ success: boolean; error?: string }>;
 }
 
 interface LoginCredentials {
@@ -88,7 +87,7 @@ interface AuthResult {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-// Mock API functions for demonstration
+// Mock API functions
 const mockAPI = {
   async login(credentials: LoginCredentials): Promise<{ success: boolean; data?: { token: string; user: User }; error?: string }> {
     await new Promise(resolve => setTimeout(resolve, 1000));
@@ -131,6 +130,7 @@ const mockAPI = {
     }
     return { success: false, error: 'Invalid credentials' };
   },
+
   async signup(userData: SignupData): Promise<{ success: boolean; data?: { token: string; user: User }; error?: string }> {
     await new Promise(resolve => setTimeout(resolve, 1200));
     if (userData.email === 'existing@example.com') {
@@ -175,19 +175,23 @@ const mockAPI = {
       }
     };
   },
-  async verifyEmail(token: string): Promise<{ success: boolean; error?: string }> {
+
+  async verifyEmail() {
     await new Promise(resolve => setTimeout(resolve, 800));
     return { success: true };
   },
-  async sendVerificationEmail(): Promise<{ success: boolean; error?: string }> {
+
+  async sendVerificationEmail() {
     await new Promise(resolve => setTimeout(resolve, 500));
     return { success: true };
   },
-  async resetPassword(email: string): Promise<{ success: boolean; error?: string }> {
+
+  async resetPassword() {
     await new Promise(resolve => setTimeout(resolve, 800));
     return { success: true };
   },
-  async updateProfile(updates: Partial<User['profile']>): Promise<{ success: boolean; error?: string }> {
+
+  async updateProfile() {
     await new Promise(resolve => setTimeout(resolve, 600));
     return { success: true };
   }
@@ -195,7 +199,7 @@ const mockAPI = {
 
 const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(false);
@@ -205,13 +209,7 @@ const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       const response = await mockAPI.login(credentials);
       if (response.success && response.data) {
-        const { user: userData } = response.data;
-        setUser(userData);
-        trackEvent('user_login', {
-          userId: userData.id,
-          loginCount: userData.usage.loginCount,
-          planType: userData.usage.planType
-        });
+        setUser(response.data.user);
         return { success: true };
       } else {
         return { success: false, error: response.error };
@@ -225,16 +223,8 @@ const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       const response = await mockAPI.signup(userData);
       if (response.success && response.data) {
-        const { user: newUser } = response.data;
-        setUser(newUser);
-        trackEvent('user_signup', {
-          userId: newUser.id,
-          source: userData.source,
-          campaign: userData.campaign,
-          company: userData.company,
-          acceptedMarketing: userData.acceptedMarketing
-        });
-        return { success: true, requiresVerification: !newUser.emailVerified };
+        setUser(response.data.user);
+        return { success: true, requiresVerification: !response.data.user.emailVerified };
       } else {
         return { success: false, error: response.error };
       }
@@ -245,10 +235,6 @@ const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = () => {
     setUser(null);
-    // Track logout event
-    if (user) {
-      trackEvent('user_logout', { userId: user.id });
-    }
   };
 
   const sendVerificationEmail = async () => {
@@ -259,42 +245,28 @@ const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const resetPassword = async (email: string) => {
+  const resetPassword = async () => {
     try {
-      return await mockAPI.resetPassword(email);
+      return await mockAPI.resetPassword();
     } catch {
       return { success: false, error: 'Failed to send reset email' };
     }
   };
 
-  const updateProfile = async (updates: Partial<User['profile']>) => {
+  const updateProfile = async () => {
     try {
-      const response = await mockAPI.updateProfile(updates);
-      if (response.success && user) {
-        setUser({ ...user, profile: { ...user.profile, ...updates } });
-      }
-      return response;
+      return await mockAPI.updateProfile();
     } catch {
       return { success: false, error: 'Failed to update profile' };
     }
   };
 
-  const verifyEmail = async (token: string) => {
+  const verifyEmail = async () => {
     try {
-      const response = await mockAPI.verifyEmail(token);
-      if (response.success && user) {
-        setUser({ ...user, emailVerified: true });
-      }
-      return response;
+      return await mockAPI.verifyEmail();
     } catch {
       return { success: false, error: 'Failed to verify email' };
     }
-  };
-
-  // Marketing event tracking
-  const trackEvent = (eventName: string, properties: Record<string, unknown>) => {
-    // Simulate analytics integration
-    console.log('Marketing Event:', eventName, properties);
   };
 
   const value: AuthContextType = {
@@ -321,7 +293,7 @@ const useAuth = (): AuthContextType => {
   return context;
 };
 
-// Login Component
+// Login form
 const LoginForm = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -343,80 +315,45 @@ const LoginForm = () => {
   };
 
   return (
-    <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
-      <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">Welcome Back</h2>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
-          <div className="relative">
-            <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Enter your email"
-              required
-            />
-          </div>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-          <div className="relative">
-            <Lock className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-            <input
-              type={showPassword ? 'text' : 'password'}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Enter your password"
-              required
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
-            >
-              {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-            </button>
-          </div>
-        </div>
-        <div className="flex items-center justify-between">
-          <label className="flex items-center">
-            <input
-              type="checkbox"
-              checked={rememberMe}
-              onChange={(e) => setRememberMe(e.target.checked)}
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-            />
-            <span className="ml-2 text-sm text-gray-600">Remember me</span>
-          </label>
-          <button type="button" className="text-sm text-blue-600 hover:text-blue-500">
-            Forgot password?
-          </button>
-        </div>
-        {error && (
-          <div className="flex items-center space-x-2 text-red-600 text-sm">
-            <AlertCircle className="h-4 w-4" />
-            <span>{error}</span>
-          </div>
-        )}
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-        >
-          {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Sign In'}
-        </button>
-      </form>
-      <div className="mt-4 text-center text-sm text-gray-600">
-        Try demo account: demo@example.com / demo123
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="Email"
+          required
+        />
       </div>
-    </div>
+      <div>
+        <input
+          type={showPassword ? 'text' : 'password'}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Password"
+          required
+        />
+        <button type="button" onClick={() => setShowPassword(!showPassword)}>
+          {showPassword ? 'Hide' : 'Show'}
+        </button>
+      </div>
+      <label>
+        <input
+          type="checkbox"
+          checked={rememberMe}
+          onChange={(e) => setRememberMe(e.target.checked)}
+        />
+        Remember me
+      </label>
+      {error && <p>{error}</p>}
+      <button type="submit" disabled={isLoading}>
+        {isLoading ? 'Loading...' : 'Login'}
+      </button>
+    </form>
   );
 };
 
-// Signup Component
+// Signup form
 const SignupForm = () => {
   const [formData, setFormData] = useState({
     firstName: '',
@@ -439,7 +376,7 @@ const SignupForm = () => {
     setError('');
     setIsLoading(true);
     if (!formData.acceptedTerms) {
-      setError('Please accept the terms and conditions');
+      setError('Please accept the terms');
       setIsLoading(false);
       return;
     }
@@ -463,263 +400,56 @@ const SignupForm = () => {
   };
 
   return (
-    <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
-      <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">Create Account</h2>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
-            <input
-              type="text"
-              name="firstName"
-              value={formData.firstName}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
-            <input
-              type="text"
-              name="lastName"
-              value={formData.lastName}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            />
-          </div>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
-          <div className="relative">
-            <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-            <input
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            />
-          </div>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-          <div className="relative">
-            <Lock className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-            <input
-              type={showPassword ? 'text' : 'password'}
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
-            >
-              {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-            </button>
-          </div>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Company</label>
-          <input
-            type="text"
-            name="company"
-            value={formData.company}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Job Title</label>
-          <input
-            type="text"
-            name="jobTitle"
-            value={formData.jobTitle}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-        <div className="space-y-3">
-          <label className="flex items-center">
-            <input
-              type="checkbox"
-              name="acceptedTerms"
-              checked={formData.acceptedTerms}
-              onChange={handleChange}
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-            />
-            <span className="ml-2 text-sm text-gray-600">
-              I agree to the Terms of Service and Privacy Policy
-            </span>
-          </label>
-          <label className="flex items-center">
-            <input
-              type="checkbox"
-              name="acceptedMarketing"
-              checked={formData.acceptedMarketing}
-              onChange={handleChange}
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-            />
-            <span className="ml-2 text-sm text-gray-600">
-              I'd like to receive marketing emails and product updates
-            </span>
-          </label>
-        </div>
-        {error && (
-          <div className="flex items-center space-x-2 text-red-600 text-sm">
-            <AlertCircle className="h-4 w-4" />
-            <span>{error}</span>
-          </div>
-        )}
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-        >
-          {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Create Account'}
-        </button>
-      </form>
-    </div>
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <input name="firstName" value={formData.firstName} onChange={handleChange} placeholder="First name" required />
+      <input name="lastName" value={formData.lastName} onChange={handleChange} placeholder="Last name" required />
+      <input name="email" value={formData.email} onChange={handleChange} placeholder="Email" required />
+      <input
+        type={showPassword ? 'text' : 'password'}
+        name="password"
+        value={formData.password}
+        onChange={handleChange}
+        placeholder="Password"
+        required
+      />
+      <button type="button" onClick={() => setShowPassword(!showPassword)}>
+        {showPassword ? 'Hide' : 'Show'}
+      </button>
+      <label>
+        <input type="checkbox" name="acceptedTerms" checked={formData.acceptedTerms} onChange={handleChange} />
+        Accept terms
+      </label>
+      <label>
+        <input type="checkbox" name="acceptedMarketing" checked={formData.acceptedMarketing} onChange={handleChange} />
+        Accept marketing
+      </label>
+      {error && <p>{error}</p>}
+      <button type="submit" disabled={isLoading}>
+        {isLoading ? 'Loading...' : 'Signup'}
+      </button>
+    </form>
   );
 };
 
-// Main App Component
+// Demo App
 const DemoApp = () => {
   const [currentView, setCurrentView] = useState<'login' | 'signup'>('login');
-  const { user, loading, logout } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-      </div>
-    );
-  }
+  const { user, logout } = useAuth();
 
   if (user) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <nav className="bg-white shadow">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between h-16">
-              <div className="flex items-center">
-                <h1 className="text-xl font-semibold">Marketing Dashboard</h1>
-              </div>
-              <div className="flex items-center space-x-4">
-                <span className="text-sm text-gray-600">
-                  Welcome, {user.profile.firstName}!
-                </span>
-                <button
-                  onClick={logout}
-                  className="text-sm text-red-600 hover:text-red-500"
-                >
-                  Logout
-                </button>
-              </div>
-            </div>
-          </div>
-        </nav>
-        <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-          <div className="px-4 py-6 sm:px-0">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <div className="bg-white overflow-hidden shadow rounded-lg">
-                <div className="p-5">
-                  <h3 className="text-lg font-medium text-gray-900">User Profile</h3>
-                  <div className="mt-4 space-y-2">
-                    <p className="text-sm text-gray-600">Name: {user.profile.firstName} {user.profile.lastName}</p>
-                    <p className="text-sm text-gray-600">Email: {user.email}</p>
-                    <p className="text-sm text-gray-600">Company: {user.profile.company}</p>
-                    <p className="text-sm text-gray-600">Plan: {user.usage.planType}</p>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-white overflow-hidden shadow rounded-lg">
-                <div className="p-5">
-                  <h3 className="text-lg font-medium text-gray-900">Marketing Data</h3>
-                  <div className="mt-4 space-y-2">
-                    <p className="text-sm text-gray-600">Source: {user.marketing.source}</p>
-                    <p className="text-sm text-gray-600">Campaign: {user.marketing.campaign}</p>
-                    <p className="text-sm text-gray-600">Tags: {user.marketing.tags.join(', ')}</p>
-                    <p className="text-sm text-gray-600">
-                      Marketing Emails: {user.marketing.acceptedMarketing ? 'Yes' : 'No'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-white overflow-hidden shadow rounded-lg">
-                <div className="p-5">
-                  <h3 className="text-lg font-medium text-gray-900">Account Status</h3>
-                  <div className="mt-4 space-y-2">
-                    <div className="flex items-center">
-                      {user.emailVerified ? (
-                        <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
-                      ) : (
-                        <AlertCircle className="h-4 w-4 text-red-500 mr-2" />
-                      )}
-                      <span className="text-sm text-gray-600">
-                        Email {user.emailVerified ? 'Verified' : 'Not Verified'}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-600">Login Count: {user.usage.loginCount}</p>
-                    <p className="text-sm text-gray-600">
-                      Member Since: {new Date(user.createdAt).toLocaleDateString()}
-                    </p>
-                    {user.usage.trialEndDate && (
-                      <p className="text-sm text-gray-600">
-                        Trial Ends: {new Date(user.usage.trialEndDate).toLocaleDateString()}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </main>
+      <div>
+        <h2>Welcome, {user.profile.firstName}!</h2>
+        <button onClick={logout}>Logout</button>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Marketing Platform</h1>
-          <p className="mt-2 text-sm text-gray-600">
-            Manage your marketing campaigns and track performance
-          </p>
-        </div>
-        <div className="mb-4">
-          <div className="flex rounded-md shadow-sm">
-            <button
-              onClick={() => setCurrentView('login')}
-              className={`flex-1 py-2 px-4 text-sm font-medium rounded-l-md border ${
-                currentView === 'login'
-                  ? 'bg-blue-600 text-white border-blue-600'
-                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-              }`}
-            >
-              Login
-            </button>
-            <button
-              onClick={() => setCurrentView('signup')}
-              className={`flex-1 py-2 px-4 text-sm font-medium rounded-r-md border-t border-r border-b ${
-                currentView === 'signup'
-                  ? 'bg-blue-600 text-white border-blue-600'
-                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-              }`}
-            >
-              Signup
-            </button>
-          </div>
-        </div>
-        {currentView === 'login' ? <LoginForm /> : <SignupForm />}
-      </div>
+    <div>
+      <button onClick={() => setCurrentView('login')}>Login</button>
+      <button onClick={() => setCurrentView('signup')}>Signup</button>
+      {currentView === 'login' ? <LoginForm /> : <SignupForm />}
     </div>
   );
 };

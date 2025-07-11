@@ -90,7 +90,7 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 // Mock API functions for demonstration
 const mockAPI = {
-  async login(credentials: LoginCredentials): Promise<{ success: boolean; data?: any; error?: string }> {
+  async login(credentials: LoginCredentials): Promise<{ success: boolean; data?: { token: string; user: User }; error?: string }> {
     await new Promise(resolve => setTimeout(resolve, 1000));
     if (credentials.email === 'demo@example.com' && credentials.password === 'demo123') {
       return {
@@ -131,7 +131,7 @@ const mockAPI = {
     }
     return { success: false, error: 'Invalid credentials' };
   },
-  async signup(userData: SignupData): Promise<{ success: boolean; data?: any; error?: string }> {
+  async signup(userData: SignupData): Promise<{ success: boolean; data?: { token: string; user: User }; error?: string }> {
     await new Promise(resolve => setTimeout(resolve, 1200));
     if (userData.email === 'existing@example.com') {
       return { success: false, error: 'Email already exists' };
@@ -187,7 +187,7 @@ const mockAPI = {
     await new Promise(resolve => setTimeout(resolve, 800));
     return { success: true };
   },
-  async updateProfile(updates: any): Promise<{ success: boolean; error?: string }> {
+  async updateProfile(updates: Partial<User['profile']>): Promise<{ success: boolean; error?: string }> {
     await new Promise(resolve => setTimeout(resolve, 600));
     return { success: true };
   }
@@ -196,64 +196,17 @@ const mockAPI = {
 const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const [token, setToken] = useState<string | null>(null);
-
-  // Store token in memory instead of localStorage
-  const tokenStore = { current: '' };
 
   useEffect(() => {
     setLoading(false);
   }, []);
 
-  const fetchUserProfile = async (authToken: string) => {
-    try {
-      if (authToken === 'mock-jwt-token') {
-        setUser({
-          id: '1',
-          email: 'demo@example.com',
-          profile: {
-            firstName: 'Demo',
-            lastName: 'User',
-            company: 'Demo Company',
-            jobTitle: 'Marketing Manager'
-          },
-          usage: {
-            onboardingCompleted: true,
-            planType: 'trial',
-            trialEndDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-            loginCount: 5
-          },
-          marketing: {
-            source: 'google',
-            campaign: 'spring-2024',
-            acceptedMarketing: true,
-            tags: ['high-value', 'engaged']
-          },
-          preferences: {
-            notifications: true,
-            newsletter: true,
-            productUpdates: true
-          },
-          createdAt: new Date().toISOString(),
-          emailVerified: true
-        });
-      }
-    } catch (error) {
-      console.error('Error fetching profile:', error);
-      logout();
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const login = async (credentials: LoginCredentials): Promise<AuthResult> => {
     try {
       const response = await mockAPI.login(credentials);
       if (response.success && response.data) {
-        const { token: newToken, user: userData } = response.data;
-        setToken(newToken);
+        const { user: userData } = response.data;
         setUser(userData);
-        tokenStore.current = newToken;
         trackEvent('user_login', {
           userId: userData.id,
           loginCount: userData.usage.loginCount,
@@ -263,7 +216,7 @@ const AuthProvider = ({ children }: { children: ReactNode }) => {
       } else {
         return { success: false, error: response.error };
       }
-    } catch (error) {
+    } catch {
       return { success: false, error: 'Network error occurred' };
     }
   };
@@ -272,10 +225,8 @@ const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       const response = await mockAPI.signup(userData);
       if (response.success && response.data) {
-        const { token: newToken, user: newUser } = response.data;
-        setToken(newToken);
+        const { user: newUser } = response.data;
         setUser(newUser);
-        tokenStore.current = newToken;
         trackEvent('user_signup', {
           userId: newUser.id,
           source: userData.source,
@@ -283,22 +234,18 @@ const AuthProvider = ({ children }: { children: ReactNode }) => {
           company: userData.company,
           acceptedMarketing: userData.acceptedMarketing
         });
-        return { 
-          success: true, 
-          requiresVerification: !newUser.emailVerified 
-        };
+        return { success: true, requiresVerification: !newUser.emailVerified };
       } else {
         return { success: false, error: response.error };
       }
-    } catch (error) {
+    } catch {
       return { success: false, error: 'Network error occurred' };
     }
   };
 
   const logout = () => {
-    setToken(null);
     setUser(null);
-    tokenStore.current = '';
+    // Track logout event
     if (user) {
       trackEvent('user_logout', { userId: user.id });
     }
@@ -306,18 +253,16 @@ const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const sendVerificationEmail = async () => {
     try {
-      const response = await mockAPI.sendVerificationEmail();
-      return response;
-    } catch (error) {
+      return await mockAPI.sendVerificationEmail();
+    } catch {
       return { success: false, error: 'Failed to send verification email' };
     }
   };
 
   const resetPassword = async (email: string) => {
     try {
-      const response = await mockAPI.resetPassword(email);
-      return response;
-    } catch (error) {
+      return await mockAPI.resetPassword(email);
+    } catch {
       return { success: false, error: 'Failed to send reset email' };
     }
   };
@@ -326,13 +271,10 @@ const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       const response = await mockAPI.updateProfile(updates);
       if (response.success && user) {
-        setUser({
-          ...user,
-          profile: { ...user.profile, ...updates }
-        });
+        setUser({ ...user, profile: { ...user.profile, ...updates } });
       }
       return response;
-    } catch (error) {
+    } catch {
       return { success: false, error: 'Failed to update profile' };
     }
   };
@@ -341,18 +283,17 @@ const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       const response = await mockAPI.verifyEmail(token);
       if (response.success && user) {
-        setUser({
-          ...user,
-          emailVerified: true
-        });
+        setUser({ ...user, emailVerified: true });
       }
       return response;
-    } catch (error) {
+    } catch {
       return { success: false, error: 'Failed to verify email' };
     }
   };
 
-  const trackEvent = (eventName: string, properties: Record<string, any>) => {
+  // Marketing event tracking
+  const trackEvent = (eventName: string, properties: Record<string, unknown>) => {
+    // Simulate analytics integration
     console.log('Marketing Event:', eventName, properties);
   };
 
@@ -783,5 +724,4 @@ const DemoApp = () => {
   );
 };
 
-// Export AuthProvider for wrapping the app
 export { AuthProvider, useAuth, DemoApp };

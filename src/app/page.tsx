@@ -8,7 +8,7 @@ import React, {
   ReactNode,
   FormEvent
 } from 'react';
-import { Mail, Lock, User, Eye, EyeOff, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 
 // Enhanced interfaces for marketing-focused auth
 interface User {
@@ -91,9 +91,7 @@ const AuthContext = createContext<AuthContextType | null>(null);
 // Mock API functions for demonstration
 const mockAPI = {
   async login(credentials: LoginCredentials): Promise<{ success: boolean; data?: any; error?: string }> {
-    // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 1000));
-    
     if (credentials.email === 'demo@example.com' && credentials.password === 'demo123') {
       return {
         success: true,
@@ -131,17 +129,13 @@ const mockAPI = {
         }
       };
     }
-    
     return { success: false, error: 'Invalid credentials' };
   },
-
   async signup(userData: SignupData): Promise<{ success: boolean; data?: any; error?: string }> {
     await new Promise(resolve => setTimeout(resolve, 1200));
-    
     if (userData.email === 'existing@example.com') {
       return { success: false, error: 'Email already exists' };
     }
-    
     return {
       success: true,
       data: {
@@ -181,22 +175,18 @@ const mockAPI = {
       }
     };
   },
-
   async verifyEmail(token: string): Promise<{ success: boolean; error?: string }> {
     await new Promise(resolve => setTimeout(resolve, 800));
     return { success: true };
   },
-
   async sendVerificationEmail(): Promise<{ success: boolean; error?: string }> {
     await new Promise(resolve => setTimeout(resolve, 500));
     return { success: true };
   },
-
   async resetPassword(email: string): Promise<{ success: boolean; error?: string }> {
     await new Promise(resolve => setTimeout(resolve, 800));
     return { success: true };
   },
-
   async updateProfile(updates: any): Promise<{ success: boolean; error?: string }> {
     await new Promise(resolve => setTimeout(resolve, 600));
     return { success: true };
@@ -208,40 +198,15 @@ const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState<boolean>(true);
   const [token, setToken] = useState<string | null>(null);
 
-  // Initialize auth state
+  // Store token in memory instead of localStorage
+  const tokenStore = { current: '' };
+
   useEffect(() => {
-    const storedToken = getStoredToken();
-    if (storedToken) {
-      setToken(storedToken);
-      fetchUserProfile(storedToken);
-    } else {
-      setLoading(false);
-    }
+    setLoading(false);
   }, []);
-
-  const getStoredToken = (): string | null => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('auth_token');
-    }
-    return null;
-  };
-
-  const storeToken = (newToken: string) => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('auth_token', newToken);
-    }
-  };
-
-  const removeToken = () => {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('auth_token');
-    }
-  };
 
   const fetchUserProfile = async (authToken: string) => {
     try {
-      // In a real app, this would be an API call
-      // For demo, we'll use mock data
       if (authToken === 'mock-jwt-token') {
         setUser({
           id: '1',
@@ -284,20 +249,16 @@ const AuthProvider = ({ children }: { children: ReactNode }) => {
   const login = async (credentials: LoginCredentials): Promise<AuthResult> => {
     try {
       const response = await mockAPI.login(credentials);
-      
       if (response.success && response.data) {
         const { token: newToken, user: userData } = response.data;
         setToken(newToken);
         setUser(userData);
-        storeToken(newToken);
-        
-        // Track login event for marketing
+        tokenStore.current = newToken;
         trackEvent('user_login', {
           userId: userData.id,
           loginCount: userData.usage.loginCount,
           planType: userData.usage.planType
         });
-        
         return { success: true };
       } else {
         return { success: false, error: response.error };
@@ -310,14 +271,11 @@ const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signup = async (userData: SignupData): Promise<AuthResult> => {
     try {
       const response = await mockAPI.signup(userData);
-      
       if (response.success && response.data) {
         const { token: newToken, user: newUser } = response.data;
         setToken(newToken);
         setUser(newUser);
-        storeToken(newToken);
-        
-        // Track signup event for marketing
+        tokenStore.current = newToken;
         trackEvent('user_signup', {
           userId: newUser.id,
           source: userData.source,
@@ -325,7 +283,6 @@ const AuthProvider = ({ children }: { children: ReactNode }) => {
           company: userData.company,
           acceptedMarketing: userData.acceptedMarketing
         });
-        
         return { 
           success: true, 
           requiresVerification: !newUser.emailVerified 
@@ -341,9 +298,7 @@ const AuthProvider = ({ children }: { children: ReactNode }) => {
   const logout = () => {
     setToken(null);
     setUser(null);
-    removeToken();
-    
-    // Track logout event
+    tokenStore.current = '';
     if (user) {
       trackEvent('user_logout', { userId: user.id });
     }
@@ -370,14 +325,12 @@ const AuthProvider = ({ children }: { children: ReactNode }) => {
   const updateProfile = async (updates: Partial<User['profile']>) => {
     try {
       const response = await mockAPI.updateProfile(updates);
-      
       if (response.success && user) {
         setUser({
           ...user,
           profile: { ...user.profile, ...updates }
         });
       }
-      
       return response;
     } catch (error) {
       return { success: false, error: 'Failed to update profile' };
@@ -387,27 +340,19 @@ const AuthProvider = ({ children }: { children: ReactNode }) => {
   const verifyEmail = async (token: string) => {
     try {
       const response = await mockAPI.verifyEmail(token);
-      
       if (response.success && user) {
         setUser({
           ...user,
           emailVerified: true
         });
       }
-      
       return response;
     } catch (error) {
       return { success: false, error: 'Failed to verify email' };
     }
   };
 
-  // Marketing event tracking
   const trackEvent = (eventName: string, properties: Record<string, any>) => {
-    // In a real app, this would send to analytics services like:
-    // - Google Analytics
-    // - Mixpanel
-    // - Amplitude
-    // - Facebook Pixel
     console.log('Marketing Event:', eventName, properties);
   };
 
@@ -443,32 +388,25 @@ const LoginForm = () => {
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  
   const { login } = useAuth();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
-
     const result = await login({ email, password, rememberMe });
-    
     if (!result.success) {
       setError(result.error || 'Login failed');
     }
-    
     setIsLoading(false);
   };
 
   return (
     <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
       <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">Welcome Back</h2>
-      
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Email Address
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
           <div className="relative">
             <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
             <input
@@ -481,11 +419,8 @@ const LoginForm = () => {
             />
           </div>
         </div>
-
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Password
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
           <div className="relative">
             <Lock className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
             <input
@@ -505,7 +440,6 @@ const LoginForm = () => {
             </button>
           </div>
         </div>
-
         <div className="flex items-center justify-between">
           <label className="flex items-center">
             <input
@@ -516,35 +450,24 @@ const LoginForm = () => {
             />
             <span className="ml-2 text-sm text-gray-600">Remember me</span>
           </label>
-          
-          <button
-            type="button"
-            className="text-sm text-blue-600 hover:text-blue-500"
-          >
+          <button type="button" className="text-sm text-blue-600 hover:text-blue-500">
             Forgot password?
           </button>
         </div>
-
         {error && (
           <div className="flex items-center space-x-2 text-red-600 text-sm">
             <AlertCircle className="h-4 w-4" />
             <span>{error}</span>
           </div>
         )}
-
         <button
           type="submit"
           disabled={isLoading}
           className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
         >
-          {isLoading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            'Sign In'
-          )}
+          {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Sign In'}
         </button>
       </form>
-
       <div className="mt-4 text-center text-sm text-gray-600">
         Try demo account: demo@example.com / demo123
       </div>
@@ -568,30 +491,25 @@ const SignupForm = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  
   const { signup } = useAuth();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
-
     if (!formData.acceptedTerms) {
       setError('Please accept the terms and conditions');
       setIsLoading(false);
       return;
     }
-
     const result = await signup({
       ...formData,
       source: 'organic',
       campaign: 'main-signup'
     });
-    
     if (!result.success) {
       setError(result.error || 'Signup failed');
     }
-    
     setIsLoading(false);
   };
 
@@ -606,13 +524,10 @@ const SignupForm = () => {
   return (
     <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
       <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">Create Account</h2>
-      
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              First Name
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
             <input
               type="text"
               name="firstName"
@@ -623,9 +538,7 @@ const SignupForm = () => {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Last Name
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
             <input
               type="text"
               name="lastName"
@@ -636,11 +549,8 @@ const SignupForm = () => {
             />
           </div>
         </div>
-
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Email Address
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
           <div className="relative">
             <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
             <input
@@ -653,11 +563,8 @@ const SignupForm = () => {
             />
           </div>
         </div>
-
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Password
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
           <div className="relative">
             <Lock className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
             <input
@@ -677,11 +584,8 @@ const SignupForm = () => {
             </button>
           </div>
         </div>
-
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Company
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Company</label>
           <input
             type="text"
             name="company"
@@ -690,11 +594,8 @@ const SignupForm = () => {
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
-
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Job Title
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Job Title</label>
           <input
             type="text"
             name="jobTitle"
@@ -703,7 +604,6 @@ const SignupForm = () => {
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
-
         <div className="space-y-3">
           <label className="flex items-center">
             <input
@@ -717,7 +617,6 @@ const SignupForm = () => {
               I agree to the Terms of Service and Privacy Policy
             </span>
           </label>
-          
           <label className="flex items-center">
             <input
               type="checkbox"
@@ -731,24 +630,18 @@ const SignupForm = () => {
             </span>
           </label>
         </div>
-
         {error && (
           <div className="flex items-center space-x-2 text-red-600 text-sm">
             <AlertCircle className="h-4 w-4" />
             <span>{error}</span>
           </div>
         )}
-
         <button
           type="submit"
           disabled={isLoading}
           className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
         >
-          {isLoading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            'Create Account'
-          )}
+          {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Create Account'}
         </button>
       </form>
     </div>
@@ -757,7 +650,7 @@ const SignupForm = () => {
 
 // Main App Component
 const App = () => {
-  const [currentView, setCurrentView] = useState<'login' | 'signup' | 'dashboard'>('login');
+  const [currentView, setCurrentView] = useState<'login' | 'signup'>('login');
   const { user, loading, logout } = useAuth();
 
   if (loading) {
@@ -791,7 +684,6 @@ const App = () => {
             </div>
           </div>
         </nav>
-        
         <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
           <div className="px-4 py-6 sm:px-0">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -806,7 +698,6 @@ const App = () => {
                   </div>
                 </div>
               </div>
-              
               <div className="bg-white overflow-hidden shadow rounded-lg">
                 <div className="p-5">
                   <h3 className="text-lg font-medium text-gray-900">Marketing Data</h3>
@@ -820,7 +711,6 @@ const App = () => {
                   </div>
                 </div>
               </div>
-              
               <div className="bg-white overflow-hidden shadow rounded-lg">
                 <div className="p-5">
                   <h3 className="text-lg font-medium text-gray-900">Account Status</h3>
@@ -839,6 +729,11 @@ const App = () => {
                     <p className="text-sm text-gray-600">
                       Member Since: {new Date(user.createdAt).toLocaleDateString()}
                     </p>
+                    {user.usage.trialEndDate && (
+                      <p className="text-sm text-gray-600">
+                        Trial Ends: {new Date(user.usage.trialEndDate).toLocaleDateString()}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -850,44 +745,43 @@ const App = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="flex justify-center space-x-4 mb-8">
-          <button
-            onClick={() => setCurrentView('login')}
-            className={`px-4 py-2 rounded-md text-sm font-medium ${
-              currentView === 'login'
-                ? 'bg-blue-600 text-white'
-                : 'bg-white text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            Login
-          </button>
-          <button
-            onClick={() => setCurrentView('signup')}
-            className={`px-4 py-2 rounded-md text-sm font-medium ${
-              currentView === 'signup'
-                ? 'bg-blue-600 text-white'
-                : 'bg-white text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            Sign Up
-          </button>
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <div className="w-full max-w-md">
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">Marketing Platform</h1>
+          <p className="mt-2 text-sm text-gray-600">
+            Manage your marketing campaigns and track performance
+          </p>
         </div>
-        
+        <div className="mb-4">
+          <div className="flex rounded-md shadow-sm">
+            <button
+              onClick={() => setCurrentView('login')}
+              className={`flex-1 py-2 px-4 text-sm font-medium rounded-l-md border ${
+                currentView === 'login'
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              Login
+            </button>
+            <button
+              onClick={() => setCurrentView('signup')}
+              className={`flex-1 py-2 px-4 text-sm font-medium rounded-r-md border-t border-r border-b ${
+                currentView === 'signup'
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              Signup
+            </button>
+          </div>
+        </div>
         {currentView === 'login' ? <LoginForm /> : <SignupForm />}
       </div>
     </div>
   );
 };
 
-// Demo App with AuthProvider
-const DemoApp = () => {
-  return (
-    <AuthProvider>
-      <App />
-    </AuthProvider>
-  );
-};
-
-export default DemoApp;
+// Export AuthProvider for wrapping the app
+export { AuthProvider, useAuth, App };

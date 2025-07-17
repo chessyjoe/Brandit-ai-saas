@@ -454,4 +454,4 @@ const DemoApp = () => {
   );
 };
 
-export { AuthProvider, useAuth, DemoApp };
+export { AuthProvider, useAuth, DemoApp, LoginForm, SignupForm };

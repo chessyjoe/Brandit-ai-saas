@@ -1,7 +1,11 @@
 "use client";
 
-import { DemoApp } from '@/components/DemoApp';
+import { DemoApp, AuthProvider } from '@/components/DemoApp';
 
 export default function Page() {
-  return <DemoApp />;
+  return (
+    <AuthProvider>
+      <DemoApp />
+    </AuthProvider>
+  );
 }
